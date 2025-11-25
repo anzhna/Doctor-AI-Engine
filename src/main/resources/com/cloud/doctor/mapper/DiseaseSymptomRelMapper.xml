@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cloud.doctor.mapper.DiseaseSymptomRelMapper">
+
+    <resultMap id="BaseResultMap" type="com.cloud.doctor.entity.DiseaseSymptomRel">
+            <id property="id" column="id" />
+            <result property="diseaseId" column="disease_id" />
+            <result property="symptomId" column="symptom_id" />
+            <result property="weight" column="weight" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,disease_id,symptom_id,weight
+    </sql>
+</mapper>

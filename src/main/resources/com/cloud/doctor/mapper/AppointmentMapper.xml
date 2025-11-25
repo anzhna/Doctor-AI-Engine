@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cloud.doctor.mapper.AppointmentMapper">
+
+    <resultMap id="BaseResultMap" type="com.cloud.doctor.entity.Appointment">
+            <id property="id" column="id" />
+            <result property="orderNo" column="order_no" />
+            <result property="userId" column="user_id" />
+            <result property="doctorId" column="doctor_id" />
+            <result property="scheduleId" column="schedule_id" />
+            <result property="patientName" column="patient_name" />
+            <result property="fee" column="fee" />
+            <result property="status" column="status" />
+            <result property="createTime" column="create_time" />
+            <result property="payTime" column="pay_time" />
+            <result property="updateTime" column="update_time" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,order_no,user_id,doctor_id,schedule_id,patient_name,
+        fee,status,create_time,pay_time,update_time,
+        is_deleted
+    </sql>
+</mapper>

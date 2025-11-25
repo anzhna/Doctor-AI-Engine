@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="TemplatesSettings">
+    <option name="templateConfigs">
+      <TemplateContext>
+        <option name="generateConfig">
+          <GenerateConfig>
+            <option name="annotationType" value="MYBATIS_PLUS3" />
+            <option name="basePackage" value="com.cloud.doctor" />
+            <option name="basePath" value="src/main/java" />
+            <option name="classNameStrategy" value="camel" />
+            <option name="encoding" value="UTF-8" />
+            <option name="extraClassSuffix" value="" />
+            <option name="ignoreFieldPrefix" value="" />
+            <option name="ignoreFieldSuffix" value="" />
+            <option name="ignoreTablePrefix" value="sys_,base_,bus_,ai_" />
+            <option name="ignoreTableSuffix" value="" />
+            <option name="jsr310Support" value="true" />
+            <option name="moduleName" value="Doctor-AI-Engine" />
+            <option name="modulePath" value="$PROJECT_DIR$" />
+            <option name="moduleUIInfoList">
+              <list>
+                <ModuleInfoGo>
+                  <option name="basePath" value="${domain.basePath}" />
+                  <option name="configFileName" value="serviceImpl.ftl" />
+                  <option name="configName" value="serviceImpl" />
+                  <option name="encoding" value="${domain.encoding}" />
+                  <option name="fileName" value="${domain.fileName}ServiceImpl" />
+                  <option name="fileNameWithSuffix" value="${domain.fileName}ServiceImpl.java" />
+                  <option name="modulePath" value="$PROJECT_DIR$" />
+                  <option name="packageName" value="${domain.basePackage}.service.impl" />
+                </ModuleInfoGo>
+                <ModuleInfoGo>
+                  <option name="basePath" value="${domain.basePath}" />
+                  <option name="configFileName" value="mapperInterface.ftl" />
+                  <option name="configName" value="mapperInterface" />
+                  <option name="encoding" value="${domain.encoding}" />
+                  <option name="fileName" value="${domain.fileName}Mapper" />
+                  <option name="fileNameWithSuffix" value="${domain.fileName}Mapper.java" />
+                  <option name="modulePath" value="$PROJECT_DIR$" />
+                  <option name="packageName" value="${domain.basePackage}.mapper" />
+                </ModuleInfoGo>
+                <ModuleInfoGo>
+                  <option name="basePath" value="${domain.basePath}" />
+                  <option name="configFileName" value="serviceInterface.ftl" />
+                  <option name="configName" value="serviceInterface" />
+                  <option name="encoding" value="${domain.encoding}" />
+                  <option name="fileName" value="${domain.fileName}Service" />
+                  <option name="fileNameWithSuffix" value="${domain.fileName}Service.java" />
+                  <option name="modulePath" value="$PROJECT_DIR$" />
+                  <option name="packageName" value="${domain.basePackage}.service" />
+                </ModuleInfoGo>
+                <ModuleInfoGo>
+                  <option name="basePath" value="src/main/resources" />
+                  <option name="configFileName" value="mapperXml.ftl" />
+                  <option name="configName" value="mapperXml" />
+                  <option name="encoding" value="${domain.encoding}" />
+                  <option name="fileName" value="${domain.fileName}Mapper" />
+                  <option name="fileNameWithSuffix" value="${domain.fileName}Mapper.xml" />
+                  <option name="modulePath" value="$PROJECT_DIR$" />
+                  <option name="packageName" value="${domain.basePackage}.mapper" />
+                </ModuleInfoGo>
+              </list>
+            </option>
+            <option name="needSerializable" value="true" />
+            <option name="needToStringHashcodeEquals" value="true" />
+            <option name="needsComment" value="true" />
+            <option name="needsModel" value="true" />
+            <option name="relativePackage" value="entity" />
+            <option name="superClass" value="" />
+            <option name="tableUIInfoList">
+              <list>
+                <TableUIInfo>
+                  <option name="className" value="Disease" />
+                  <option name="tableName" value="ai_disease" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="DiseaseSymptomRel" />
+                  <option name="tableName" value="ai_disease_symptom_rel" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="Symptom" />
+                  <option name="tableName" value="ai_symptom" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="Department" />
+                  <option name="tableName" value="base_department" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="Doctor" />
+                  <option name="tableName" value="base_doctor" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="Appointment" />
+                  <option name="tableName" value="bus_appointment" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="DiagnosisLog" />
+                  <option name="tableName" value="bus_diagnosis_log" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="Schedule" />
+                  <option name="tableName" value="bus_schedule" />
+                </TableUIInfo>
+                <TableUIInfo>
+                  <option name="className" value="User" />
+                  <option name="tableName" value="sys_user" />
+                </TableUIInfo>
+              </list>
+            </option>
+            <option name="templatesName" value="mybatis-plus3" />
+            <option name="useLombokPlugin" value="true" />
+          </GenerateConfig>
+        </option>
+        <option name="moduleName" value="Doctor-AI-Engine" />
+        <option name="projectPath" value="$PROJECT_DIR$" />
+        <option name="templateName" value="mybatis-plus3" />
+      </TemplateContext>
+    </option>
+  </component>
+</project>

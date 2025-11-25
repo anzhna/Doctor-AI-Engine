@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cloud.doctor.mapper.DiagnosisLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.cloud.doctor.entity.DiagnosisLog">
+            <id property="id" column="id" />
+            <result property="userId" column="user_id" />
+            <result property="symptomInput" column="symptom_input" />
+            <result property="aiResultJson" column="ai_result_json" />
+            <result property="recommendDeptName" column="recommend_dept_name" />
+            <result property="createTime" column="create_time" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,user_id,symptom_input,ai_result_json,recommend_dept_name,create_time,
+        is_deleted
+    </sql>
+</mapper>

@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: Docker-Ai-Engine # 已修改：新的项目名称
+  data:
+    redis:
+      host: 8.145.35.37
+      port: 6379
+      password: 147258Yzf # 记得填你 docker 启动时的 redis 密码
+      database: 0
+
+  # 1. 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://8.145.35.37:3306/medical_ai_platform?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 147258Yzf
+
+  # 2. Jackson 时间格式化
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+# 3. MyBatis Plus 配置
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 开启 SQL 日志
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# 4. Swagger 接口文档配置
+springdoc:
+  swagger-ui:
+    path: /doc.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# Sa-Token 配置
+sa-token:
+  token-name: satoken     # token 名称 (前端存在 cookie/header 里的名称)
+  timeout: 2592000        # token 有效期 30 天 (单位秒)
+  active-timeout: -1      # 临时有效期 (指定时间内无操作就掉线)，-1 代表不限制
+  is-concurrent: true     # 是否允许同一账号并发登录 (true: 允许)
+  is-share: true          # 在多人登录同一账号时，是否共用一个 token (true: 共用)
+  token-style: uuid       # token 生成风格
+  is-read-body: false     # 是否尝试从请求体里读取 token
+  is-read-head: true      # 是否尝试从 header 里读取 token

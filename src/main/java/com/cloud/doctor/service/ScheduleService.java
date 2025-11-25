@@ -1,0 +1,13 @@
+package com.cloud.doctor.service;
+
+import com.cloud.doctor.entity.Schedule;
+import com.baomidou.mybatisplus.extension.service.IService;
+
+/**
+* @author 10533
+* @description 针对表【bus_schedule(医生排班号源表)】的数据库操作Service
+* @createDate 2025-11-20 22:59:12
+*/
+public interface ScheduleService extends IService<Schedule> {
+
+}

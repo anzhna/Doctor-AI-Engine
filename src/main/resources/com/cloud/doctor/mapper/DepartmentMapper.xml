@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cloud.doctor.mapper.DepartmentMapper">
+
+    <resultMap id="BaseResultMap" type="com.cloud.doctor.entity.Department">
+            <id property="id" column="id" />
+            <result property="name" column="name" />
+            <result property="code" column="code" />
+            <result property="level" column="level" />
+            <result property="parentId" column="parent_id" />
+            <result property="description" column="description" />
+            <result property="createTime" column="create_time" />
+            <result property="isDeleted" column="is_deleted" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,name,code,level,parent_id,description,
+        create_time,is_deleted
+    </sql>
+</mapper>

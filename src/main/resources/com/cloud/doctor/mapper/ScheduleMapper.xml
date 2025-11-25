@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cloud.doctor.mapper.ScheduleMapper">
+
+    <resultMap id="BaseResultMap" type="com.cloud.doctor.entity.Schedule">
+            <id property="id" column="id" />
+            <result property="doctorId" column="doctor_id" />
+            <result property="workDate" column="work_date" />
+            <result property="shiftType" column="shift_type" />
+            <result property="totalQuota" column="total_quota" />
+            <result property="remainingQuota" column="remaining_quota" />
+            <result property="version" column="version" />
+            <result property="status" column="status" />
+            <result property="createTime" column="create_time" />
+            <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,doctor_id,work_date,shift_type,total_quota,remaining_quota,
+        version,status,create_time,update_time
+    </sql>
+</mapper>
