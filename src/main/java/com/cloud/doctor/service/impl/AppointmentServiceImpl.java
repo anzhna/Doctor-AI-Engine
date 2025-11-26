@@ -1,19 +1,22 @@
 package com.cloud.doctor.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.lang.Snowflake;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.cloud.doctor.entity.Appointment;
-import com.cloud.doctor.entity.Schedule;
-import com.cloud.doctor.entity.User;
+import com.cloud.doctor.entity.*;
 import com.cloud.doctor.entity.dto.AppointSubmitReq;
-import com.cloud.doctor.mapper.DoctorMapper;
-import com.cloud.doctor.mapper.ScheduleMapper;
-import com.cloud.doctor.mapper.UserMapper;
+import com.cloud.doctor.entity.vo.AppointmentVO;
+import com.cloud.doctor.mapper.*;
 import com.cloud.doctor.service.AppointmentService;
-import com.cloud.doctor.mapper.AppointmentMapper;
+import com.cloud.doctor.service.ScheduleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
 * @author 10533
@@ -34,6 +37,8 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private final Snowflake snowflake;
 
     private final DoctorMapper doctorMapper;
+
+    private final DepartmentMapper departmentMapper;
 
     @Override
     public Long submitOrder(AppointSubmitReq req, Long userId) {
@@ -78,6 +83,53 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         return appointment.getId();
 
 
+    }
+
+    @Override
+    public List<AppointmentVO> getAppointment(Long Userid) {
+        //根据用户id查询订单
+        List<Appointment> appointments = appointmentMapper.selectList(new LambdaQueryWrapper<Appointment>()
+                .eq(Appointment::getUserId, Userid)
+                .eq(Appointment::getIsDeleted, 0)
+                .orderByDesc(Appointment::getCreateTime));
+
+        //将信息填充到vo
+        return appointments.stream().map(appointment -> {
+            AppointmentVO appointmentVO = new AppointmentVO();
+            BeanUtil.copyProperties(appointment, appointmentVO);
+            //医生姓名
+            Doctor doctor = doctorMapper.selectById(appointment.getDoctorId());
+            if (doctor != null) {
+                appointmentVO.setDoctorName(doctor.getRealName());
+                //科室姓名
+                Department department = departmentMapper.selectById(doctor.getDeptId());
+                if (department != null) {
+                    appointmentVO.setDeptName(department.getName());
+                }
+
+            }
+
+            Schedule schedule = scheduleMapper.selectById(appointment.getScheduleId());
+            if (schedule != null) {
+                //就诊日期
+                appointmentVO.setWorkDate(schedule.getWorkDate());
+                //就诊班次
+                appointmentVO.setShiftDesc(schedule.getShiftType()==1 ? "上午":"下午");
+            }
+
+
+            //订单状态
+            String statusStr = switch (appointment.getStatus()) {
+                case 0 -> "待支付";
+                case 1 -> "已支付";
+                case 2 -> "已完成";
+                case 3 -> "已取消";
+                default -> "未知状态";
+            };
+            appointmentVO.setStatusDesc(statusStr);
+
+            return appointmentVO;
+        }).collect(Collectors.toList());
     }
 }
 
