@@ -2,6 +2,7 @@ package com.cloud.doctor.service;
 
 import com.cloud.doctor.entity.Appointment;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.cloud.doctor.entity.dto.AppointSubmitReq;
 
 /**
 * @author 10533
@@ -10,4 +11,5 @@ import com.baomidou.mybatisplus.extension.service.IService;
 */
 public interface AppointmentService extends IService<Appointment> {
 
+    Long submitOrder(AppointSubmitReq req, Long userId);
 }

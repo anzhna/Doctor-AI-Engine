@@ -4,16 +4,22 @@ import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloud.doctor.entity.Department;
 import com.cloud.doctor.entity.Doctor;
+import com.cloud.doctor.entity.Schedule;
 import com.cloud.doctor.entity.vo.DepartmentVO;
 import com.cloud.doctor.entity.vo.DoctorVO;
+import com.cloud.doctor.entity.vo.ScheduleVO;
 import com.cloud.doctor.mapper.DepartmentMapper;
 import com.cloud.doctor.mapper.DoctorMapper;
+import com.cloud.doctor.mapper.ScheduleMapper;
 import com.cloud.doctor.service.HospitalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -24,6 +30,8 @@ public class HospitalServiceImpl implements HospitalService {
     private final DepartmentMapper departmentMapper;
 
     private final DoctorMapper doctorMapper;
+
+    private final ScheduleMapper scheduleMapper;
 
     @Override
     public List<DepartmentVO> listDeptTree() {
@@ -55,6 +63,24 @@ public class HospitalServiceImpl implements HospitalService {
             BeanUtil.copyProperties(doctor, doctorVO);
             doctorVO.setDeptName(name);
             return doctorVO;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ScheduleVO> getScheduleList(Long doctorId) {
+        List<Schedule> schedules = scheduleMapper.selectList(new LambdaQueryWrapper<Schedule>()
+                .eq(Schedule::getDoctorId, doctorId)
+                .ge(Schedule::getWorkDate, LocalDate.now())
+                .eq(Schedule::getStatus, 1)
+                .orderByAsc(Schedule::getWorkDate));
+
+        return schedules.stream().map(schedule -> {
+            ScheduleVO scheduleVO = new ScheduleVO();
+            BeanUtil.copyProperties(schedule, scheduleVO);
+            //转换星期
+            scheduleVO.setDayOfWeek(schedule.getWorkDate().getDayOfWeek()
+                    .getDisplayName(TextStyle.FULL, Locale.CHINESE));
+            return scheduleVO;
         }).collect(Collectors.toList());
     }
 }

@@ -3,6 +3,7 @@ package com.cloud.doctor.controller;
 import com.cloud.doctor.common.Result;
 import com.cloud.doctor.entity.vo.DepartmentVO;
 import com.cloud.doctor.entity.vo.DoctorVO;
+import com.cloud.doctor.entity.vo.ScheduleVO;
 import com.cloud.doctor.service.HospitalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,4 +31,11 @@ public class HospitalController {
     public Result<List<DoctorVO>> listDoctors(@RequestParam Long deptId) {
         return Result.success(hospitalService.listDoctors(deptId));
     }
+
+    @GetMapping("/doctor/schedule")
+    @Operation(summary = "查询医生排班(未来7天)")
+    public Result<List<ScheduleVO>> listDoctorSchedule(@RequestParam Long doctorId) {
+        return Result.success(hospitalService.getScheduleList(doctorId));
+    }
+
 }
