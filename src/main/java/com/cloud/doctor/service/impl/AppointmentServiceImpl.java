@@ -13,7 +13,9 @@ import com.cloud.doctor.service.AppointmentService;
 import com.cloud.doctor.service.ScheduleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,6 +43,7 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private final DepartmentMapper departmentMapper;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Long submitOrder(AppointSubmitReq req, Long userId) {
         Schedule schedule = scheduleMapper.selectById(req.scheduleId());
         if (schedule == null) {
@@ -130,6 +133,38 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
             return appointmentVO;
         }).collect(Collectors.toList());
+    }
+
+    @Override
+    public void payOrder(Long orderId) {
+        Appointment order = appointmentMapper.selectById(orderId);
+        if (order == null) throw new RuntimeException("订单不存在");
+        if (order.getStatus() != 0) throw new RuntimeException("订单状态无法支付");
+
+        order.setStatus(1); // 已支付
+        order.setPayTime(LocalDateTime.now());
+        appointmentMapper.updateById(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class) // 事务！
+    public void cancelOrder(Long orderId) {
+        //查询订单
+        Appointment appointment = appointmentMapper.selectById(orderId);
+        if (appointment == null) {
+            throw new RuntimeException("订单不存在");
+        }
+        //确认订单是否已取消
+        if (appointment.getStatus() == 3) {
+            throw new RuntimeException("订单已取消");
+        }
+        //回滚事务
+        appointmentMapper.update(null,new LambdaUpdateWrapper<Appointment>()
+                .setSql("status = 3")
+                .eq(Appointment::getId, orderId));
+        scheduleMapper.update(null,new LambdaUpdateWrapper<Schedule>()
+                .setSql("remaining_quota = remaining_quota+1")
+                .eq(Schedule::getId,appointment.getScheduleId()));
     }
 }
 

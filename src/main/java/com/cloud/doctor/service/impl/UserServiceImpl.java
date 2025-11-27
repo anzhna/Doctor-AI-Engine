@@ -2,12 +2,15 @@ package com.cloud.doctor.service.impl;
 
 import cn.dev33.satoken.stp.SaTokenInfo;
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloud.doctor.entity.User;
 import com.cloud.doctor.entity.dto.UserLoginReq;
 import com.cloud.doctor.entity.dto.UserRegisterReq;
+import com.cloud.doctor.entity.dto.UserUpdateReq;
+import com.cloud.doctor.entity.vo.UserInfoVO;
 import com.cloud.doctor.entity.vo.UserLoginVO;
 import com.cloud.doctor.service.UserService;
 import com.cloud.doctor.mapper.UserMapper;
@@ -73,6 +76,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                 .build();
 
         return userLoginVO;
+    }
+
+    @Override
+    public UserInfoVO getUserInfo(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new RuntimeException("用户不存在");
+
+        UserInfoVO vo = new UserInfoVO();
+        // 属性复制
+        BeanUtil.copyProperties(user, vo);
+
+        // 手机号脱敏处理 (Hutool工具)
+        // DesensitizedUtil.mobilePhone(user.getPhone());
+        // 简单写法：
+        if (user.getPhone() != null && user.getPhone().length() == 11) {
+            vo.setPhone(user.getPhone().replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1****$2"));
+        }
+
+        return vo;
+    }
+
+    @Override
+    public void updateUserInfo(Long userId, UserUpdateReq req) {
+        User user = new User();
+        user.setId(userId); // 指定主键，MP 会自动生成 UPDATE语句 WHERE id = ?
+
+        // 有什么更什么
+        if (req.realName() != null) user.setRealName(req.realName());
+        if (req.email() != null) user.setEmail(req.email());
+        if (req.age() != null) user.setAge(req.age());
+        if (req.sex() != null) user.setSex(req.sex());
+
+        userMapper.updateById(user);
     }
 }
 

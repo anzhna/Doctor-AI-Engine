@@ -38,4 +38,18 @@ public class AppointmentController {
 
         return Result.success(appointmentService.getAppointment(userId));
     }
+
+    @PostMapping("/pay")
+    @Operation(summary = "模拟支付订单")
+    public Result<String> payOrder(@RequestParam Long orderId) {
+        appointmentService.payOrder(orderId);
+        return Result.success("支付成功");
+    }
+
+    @PostMapping("/cancel")
+    @Operation(summary = "取消订单(回退库存)")
+    public Result<String> cancelOrder(@RequestParam Long orderId) {
+        appointmentService.cancelOrder(orderId);
+        return Result.success("取消成功");
+    }
 }

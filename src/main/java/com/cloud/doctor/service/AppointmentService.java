@@ -18,4 +18,10 @@ public interface AppointmentService extends IService<Appointment> {
 
     //用户订单查询
     List<AppointmentVO> getAppointment(Long Userid);
+
+    //用户订单支付
+    void payOrder(Long orderId);
+
+    //用户取消订单
+    void cancelOrder(Long orderId);
 }
