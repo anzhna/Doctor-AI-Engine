@@ -11,7 +11,11 @@ import com.cloud.doctor.entity.vo.AppointmentVO;
 import com.cloud.doctor.mapper.*;
 import com.cloud.doctor.service.AppointmentService;
 import com.cloud.doctor.service.ScheduleService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +46,11 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
     private final DepartmentMapper departmentMapper;
 
-    @Override
+    private final StringRedisTemplate redisTemplate; // 注入 Redis
+
+    private DefaultRedisScript<Long> deductStockScript; // 脚本对象
+
+    /*@Override
     @Transactional(rollbackFor = Exception.class)
     public Long submitOrder(AppointSubmitReq req, Long userId) {
         Schedule schedule = scheduleMapper.selectById(req.scheduleId());
@@ -86,6 +94,74 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         return appointment.getId();
 
 
+    }*/
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long submitOrder(AppointSubmitReq req, Long userId) {
+        Long scheduleId = req.scheduleId();
+        String stockKey = "schedule:stock:" + scheduleId;
+
+        // 1.【Redis + Lua】核心扣减逻辑
+        // 执行脚本，参数是 Key
+        Long result = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
+
+        // 2.处理返回结果
+        if (result == 0) {
+            throw new RuntimeException("号源已抢光"); // ⚡️ 流量直接在这里被挡住，不查数据库
+        }
+
+        if (result == -1) {
+            // Redis 里没这个 Key？说明是冷门排班，或者Redis重启了。
+            // 【兜底策略】去数据库查一次，初始化 Redis，再试一次
+            // (实际高并发场景这里需要加分布式锁防止击穿，为了简单我们先直接查)
+            Schedule schedule = scheduleMapper.selectById(scheduleId);
+            if (schedule == null || schedule.getRemainingQuota() <= 0) {
+                throw new RuntimeException("号源已抢光");
+            }
+            // 将数据库库存写入 Redis (预热)
+            redisTemplate.opsForValue().set(stockKey, schedule.getRemainingQuota().toString());
+            // 再扣一次
+            Long retry = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
+            if (retry <= 0) throw new RuntimeException("号源已抢光");
+        }
+
+        // 走到这里，说明 Redis 扣减成功，拿到了资格
+
+        try {
+            // 3.【MySQL 落地】执行真正的业务
+            // 注意：这里依然保留乐观锁 version，作为最后一道防线
+            int rows = scheduleMapper.update(null, new LambdaUpdateWrapper<Schedule>()
+                    .setSql("remaining_quota = remaining_quota - 1")
+                    .setSql("version = version + 1")
+                    .eq(Schedule::getId, scheduleId)
+                    .gt(Schedule::getRemainingQuota, 0)); // 双重保险
+
+            if (rows == 0) {
+                throw new RuntimeException("并发冲突，请重试");
+            }
+
+            // 4.创建订单
+            User user = userMapper.selectById(userId);
+            Doctor doctor = doctorMapper.selectById(scheduleMapper.selectById(scheduleId).getDoctorId()); // 查医生为了拿费用
+
+            Appointment order = new Appointment();
+            order.setOrderNo(snowflake.nextIdStr());
+            order.setUserId(userId);
+            order.setScheduleId(scheduleId);
+            order.setDoctorId(doctor.getId());
+            order.setPatientName(user.getRealName());
+            order.setFee(doctor.getConsultPrice());
+            order.setStatus(0); // 待支付
+
+            appointmentMapper.insert(order);
+            return order.getId();
+
+        } catch (Exception e) {
+            // 5.如果 MySQL 失败了，把 Redis 扣掉的库存还回去
+            redisTemplate.opsForValue().increment(stockKey);
+            throw e; // 继续抛出异常，让事务回滚
+        }
     }
 
     @Override
@@ -165,6 +241,14 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         scheduleMapper.update(null,new LambdaUpdateWrapper<Schedule>()
                 .setSql("remaining_quota = remaining_quota+1")
                 .eq(Schedule::getId,appointment.getScheduleId()));
+    }
+
+    // 初始化时加载 Lua 脚本，防止每次请求都去读文件 IO
+    @PostConstruct
+    public void init() {
+        deductStockScript = new DefaultRedisScript<>();
+        deductStockScript.setResultType(Long.class);
+        deductStockScript.setLocation(new ClassPathResource("scripts/deduct_stock.lua"));
     }
 }
 
