@@ -18,6 +18,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -49,6 +50,9 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
     private final StringRedisTemplate redisTemplate; // 注入 Redis
 
     private DefaultRedisScript<Long> deductStockScript; // 脚本对象
+    //编程式事务管理器
+    private final TransactionTemplate transactionTemplate;
+
 
     /*@Override
     @Transactional(rollbackFor = Exception.class)
@@ -60,7 +64,7 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         if (schedule.getRemainingQuota() <= 0) {
             throw new RuntimeException("号源已抢光");
         }
-        
+
         //乐观锁订单和扣减业务
         int update = scheduleMapper.update(null, new LambdaUpdateWrapper<Schedule>()
                 .eq(Schedule::getId, schedule.getId())
@@ -96,72 +100,85 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
     }*/
 
+    // 初始化时加载 Lua 脚本，防止每次请求都去读文件 IO
+    @PostConstruct
+    public void init() {
+        deductStockScript = new DefaultRedisScript<>();
+        deductStockScript.setResultType(Long.class);
+        deductStockScript.setLocation(new ClassPathResource("scripts/deduct_stock.lua"));
+    }
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    // ❌ 【重点】这里千万不要加 @Transactional 注解！否则 Redis 拦截层会失效，所有请求都会占用数据库连接。
     public Long submitOrder(AppointSubmitReq req, Long userId) {
         Long scheduleId = req.scheduleId();
         String stockKey = "schedule:stock:" + scheduleId;
 
-        // 1.【Redis + Lua】核心扣减逻辑
-        // 执行脚本，参数是 Key
+        // Redis (纯内存操作，极速，不占数据库连接)
         Long result = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
 
-        // 2.处理返回结果
+        // 1. 库存不足 (Redis 拦截)
         if (result == 0) {
-            throw new RuntimeException("号源已抢光"); // ⚡️ 流量直接在这里被挡住，不查数据库
+            // 建议：压测时可以在 GlobalExceptionHandler 里针对这个异常不打印堆栈，防止控制台刷屏
+            //throw new RuntimeException("号源已抢光");
+            return -1L;
         }
 
+        // 2. 缓存未预热 (Redis 拦截)
         if (result == -1) {
-            // Redis 里没这个 Key？说明是冷门排班，或者Redis重启了。
-            // 【兜底策略】去数据库查一次，初始化 Redis，再试一次
-            // (实际高并发场景这里需要加分布式锁防止击穿，为了简单我们先直接查)
-            Schedule schedule = scheduleMapper.selectById(scheduleId);
-            if (schedule == null || schedule.getRemainingQuota() <= 0) {
-                throw new RuntimeException("号源已抢光");
-            }
-            // 将数据库库存写入 Redis (预热)
-            redisTemplate.opsForValue().set(stockKey, schedule.getRemainingQuota().toString());
-            // 再扣一次
-            Long retry = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
-            if (retry <= 0) throw new RuntimeException("号源已抢光");
+            // 严禁在这里查库回填 Redis！必须由管理员提前预热！
+            //throw new RuntimeException("系统异常：排班未预热");
+            return -2L;
         }
 
-        // 走到这里，说明 Redis 扣减成功，拿到了资格
+        // 数据库落地 (只有抢到号的 30 个人会走到这里)
+        return transactionTemplate.execute(status -> {
+            try {
+                // 1. MySQL 乐观锁扣减 (双重保障)
+                // SQL: UPDATE ... SET quota = quota - 1, version = version + 1 ...
+                int rows = scheduleMapper.update(null, new LambdaUpdateWrapper<Schedule>()
+                        .setSql("remaining_quota = remaining_quota - 1")
+                        .setSql("version = version + 1")
+                        .eq(Schedule::getId, scheduleId)
+                        .gt(Schedule::getRemainingQuota, 0));
 
-        try {
-            // 3.【MySQL 落地】执行真正的业务
-            // 注意：这里依然保留乐观锁 version，作为最后一道防线
-            int rows = scheduleMapper.update(null, new LambdaUpdateWrapper<Schedule>()
-                    .setSql("remaining_quota = remaining_quota - 1")
-                    .setSql("version = version + 1")
-                    .eq(Schedule::getId, scheduleId)
-                    .gt(Schedule::getRemainingQuota, 0)); // 双重保险
+                if (rows == 0) {
+                    // 极低概率会走到这里 (Redis 放行了但 MySQL 没更新成功)
+                    throw new RuntimeException("并发冲突，请重试");
+                }
 
-            if (rows == 0) {
-                throw new RuntimeException("并发冲突，请重试");
+                // 2. 准备订单数据
+                // (为了数据完整性，虽然 Update 了，还是查一下获取 DoctorId 和 Fee)
+                Schedule schedule = scheduleMapper.selectById(scheduleId);
+                Doctor doctor = doctorMapper.selectById(schedule.getDoctorId());
+                User user = userMapper.selectById(userId);
+
+                // 3. 创建订单
+                Appointment order = new Appointment();
+                order.setOrderNo(snowflake.nextIdStr()); // 雪花算法
+                order.setUserId(userId);
+                order.setScheduleId(scheduleId);
+                order.setDoctorId(doctor.getId());
+                order.setPatientName(user.getRealName());
+                order.setFee(doctor.getConsultPrice());
+                order.setStatus(0); // 0-待支付
+                order.setCreateTime(LocalDateTime.now());
+
+                appointmentMapper.insert(order);
+                return order.getId();
+
+            } catch (Exception e) {
+                // 异常处理 (事务回滚 + Redis 补偿)
+
+                // 1. 标记数据库事务回滚
+                status.setRollbackOnly();
+
+                // 2. 【关键】把 Redis 刚才扣掉的 1 个库存还回去！
+                redisTemplate.opsForValue().increment(stockKey);
+
+                // 3. 抛出异常给 Controller
+                throw new RuntimeException(e.getMessage());
             }
-
-            // 4.创建订单
-            User user = userMapper.selectById(userId);
-            Doctor doctor = doctorMapper.selectById(scheduleMapper.selectById(scheduleId).getDoctorId()); // 查医生为了拿费用
-
-            Appointment order = new Appointment();
-            order.setOrderNo(snowflake.nextIdStr());
-            order.setUserId(userId);
-            order.setScheduleId(scheduleId);
-            order.setDoctorId(doctor.getId());
-            order.setPatientName(user.getRealName());
-            order.setFee(doctor.getConsultPrice());
-            order.setStatus(0); // 待支付
-
-            appointmentMapper.insert(order);
-            return order.getId();
-
-        } catch (Exception e) {
-            // 5.如果 MySQL 失败了，把 Redis 扣掉的库存还回去
-            redisTemplate.opsForValue().increment(stockKey);
-            throw e; // 继续抛出异常，让事务回滚
-        }
+        });
     }
 
     @Override
@@ -243,13 +260,6 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                 .eq(Schedule::getId,appointment.getScheduleId()));
     }
 
-    // 初始化时加载 Lua 脚本，防止每次请求都去读文件 IO
-    @PostConstruct
-    public void init() {
-        deductStockScript = new DefaultRedisScript<>();
-        deductStockScript.setResultType(Long.class);
-        deductStockScript.setLocation(new ClassPathResource("scripts/deduct_stock.lua"));
-    }
 }
 
 

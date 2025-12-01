@@ -10,7 +10,6 @@ spring:
       port: 6379
       password: 147258Yzf # 记得填你 docker 启动时的 redis 密码
       database: 0
-
   # 1. 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -26,7 +25,7 @@ spring:
 # 3. MyBatis Plus 配置
 mybatis-plus:
   configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 开启 SQL 日志
+    # log-impl: org.apache.ibatis.logging.stdout.StdOutImpl  <-- 注释掉它！
     map-underscore-to-camel-case: true
   global-config:
     db-config:
@@ -53,3 +52,8 @@ sa-token:
   token-style: uuid       # token 生成风格
   is-read-body: false     # 是否尝试从请求体里读取 token
   is-read-head: true      # 是否尝试从 header 里读取 token
+
+#logging:
+#  level:
+#    root: error  # 全局只打印严重错误
+#    com.cloud.doctor: error # 你的业务代码也只打印报错，不打印 info

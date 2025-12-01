@@ -1,14 +1,12 @@
 package com.cloud.doctor.controller;
 
 
-import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.cloud.doctor.common.Result;
 import com.cloud.doctor.entity.dto.AppointSubmitReq;
 import com.cloud.doctor.entity.vo.AppointmentVO;
 import com.cloud.doctor.service.AppointmentService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +26,9 @@ public class AppointmentController {
         long userId = StpUtil.getLoginIdAsLong();
 
         Long appId = appointmentService.submitOrder(req, userId);
+        if (appId == -1L) {
+            return Result.error("抢完了"); // 返回 500，但不打印后台堆栈！
+        }
         return Result.success(appId);
     }
     @GetMapping("/list")
