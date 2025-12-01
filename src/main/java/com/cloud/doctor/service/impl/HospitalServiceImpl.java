@@ -1,6 +1,7 @@
 package com.cloud.doctor.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.cloud.doctor.entity.Department;
 import com.cloud.doctor.entity.Doctor;
@@ -13,14 +14,17 @@ import com.cloud.doctor.mapper.DoctorMapper;
 import com.cloud.doctor.mapper.ScheduleMapper;
 import com.cloud.doctor.service.HospitalService;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RBloomFilter;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.format.TextStyle;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,6 +36,13 @@ public class HospitalServiceImpl implements HospitalService {
     private final DoctorMapper doctorMapper;
 
     private final ScheduleMapper scheduleMapper;
+
+    private final StringRedisTemplate redisTemplate;
+
+    private final RedissonClient redissonClient;
+
+    private final RBloomFilter<Long> deptBloomFilter;
+
 
     @Override
     public List<DepartmentVO> listDeptTree() {
@@ -51,7 +62,7 @@ public class HospitalServiceImpl implements HospitalService {
         return roots;
     }
 
-    @Override
+    /*@Override
     public List<DoctorVO> listDoctors(Long deptId) {
         List<Doctor> doctors = doctorMapper.selectList(new LambdaQueryWrapper<Doctor>()
                 .eq(Doctor::getDeptId, deptId)
@@ -64,6 +75,96 @@ public class HospitalServiceImpl implements HospitalService {
             doctorVO.setDeptName(name);
             return doctorVO;
         }).collect(Collectors.toList());
+    }*/
+    // 注入需要的组件 (确保类里已经 @Autowired 或者通过 @RequiredArgsConstructor 注入了这些)
+    /* private final StringRedisTemplate redisTemplate;
+    private final RedissonClient redissonClient;
+    private final RBloomFilter<Long> deptBloomFilter;
+    */
+
+    @Override
+    public List<DoctorVO> listDoctors(Long deptId) {
+        // 1. 【防穿透 - 第一道防线】布隆过滤器拦截
+        // 如果布隆过滤器说没有，那就是真的没有，直接返回空
+        if (!deptBloomFilter.contains(deptId)) {
+            return Collections.emptyList();
+        }
+
+        String key = "hospital:doctor:" + deptId;
+
+        // 2. 查缓存
+        String json = redisTemplate.opsForValue().get(key);
+        if (StringUtils.hasText(json)) {
+            // 【防穿透 - 第二道防线】空值缓存处理
+            if ("".equals(json)) {
+                return Collections.emptyList();
+            }
+            // 命中缓存，反序列化返回
+            return JSONUtil.toList(json, DoctorVO.class);
+        }
+
+        // 3. 【防击穿】缓存未命中，准备查库，上分布式锁！
+        // 锁粒度细化到 deptId，互不影响
+        RLock lock = redissonClient.getLock("lock:doctor:" + deptId);
+
+        try {
+            // 尝试加锁：等待 5秒，锁自动过期 10秒
+            if (lock.tryLock(5, 10, TimeUnit.SECONDS)) {
+                try {
+                    // 3.1 Double Check (双重检查)
+                    // 万一排队进来的这一刻，前一个人已经写好缓存了呢？
+                    json = redisTemplate.opsForValue().get(key);
+                    if (StringUtils.hasText(json)) {
+                        if ("".equals(json)) return Collections.emptyList();
+                        return JSONUtil.toList(json, DoctorVO.class);
+                    }
+
+                    // 4. 【数据库查询】(这里填入了你原来的业务逻辑)
+                    // 4.1 先查科室名称 (优化：只查一次)
+                    Department dept = departmentMapper.selectById(deptId);
+                    String deptName = (dept != null) ? dept.getName() : "未知科室";
+
+                    // 4.2 查医生列表
+                    List<Doctor> doctors = doctorMapper.selectList(new LambdaQueryWrapper<Doctor>()
+                            .eq(Doctor::getDeptId, deptId)
+                            .eq(Doctor::getStatus, 1)); // 只查在职
+
+                    // 4.3 组装 VO
+                    List<DoctorVO> resultList = doctors.stream().map(doc -> {
+                        DoctorVO vo = new DoctorVO();
+                        BeanUtil.copyProperties(doc, vo);
+                        vo.setDeptName(deptName);
+                        return vo;
+                    }).collect(Collectors.toList());
+
+                    // 5. 写缓存
+                    if (resultList.isEmpty()) {
+                        // 【防穿透】数据库也没数据？存空值，过期时间短一点 (如 2分钟)
+                        redisTemplate.opsForValue().set(key, "", 2, TimeUnit.MINUTES);
+                    } else {
+                        // 【防雪崩】设置随机过期时间 (30分钟 + 随机 0-5分钟)
+                        // 防止大量缓存同时失效
+                        long timeout = 30 + new Random().nextInt(5);
+                        redisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(resultList), timeout, TimeUnit.MINUTES);
+                    }
+
+                    return resultList;
+                } finally {
+                    // 释放锁
+                    if (lock.isHeldByCurrentThread()) {
+                        lock.unlock();
+                    }
+                }
+            } else {
+                // 没抢到锁，说明有人正在查库，稍微睡一下，递归重试 (自旋)
+                Thread.sleep(50);
+                return listDoctors(deptId);
+            }
+        } catch (InterruptedException e) {
+            // 恢复中断状态
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("服务器繁忙，请稍后重试");
+        }
     }
 
     @Override
@@ -83,4 +184,6 @@ public class HospitalServiceImpl implements HospitalService {
             return scheduleVO;
         }).collect(Collectors.toList());
     }
+
+
 }
