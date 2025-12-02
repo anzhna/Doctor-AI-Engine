@@ -8,15 +8,20 @@ import com.cloud.doctor.service.DiagnoseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/diagnose")
 @Tag(name = "AI 智能问诊模块")
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class DiagnoseController {
 
     private final DiagnoseService diagnoseService;
+
+    public DiagnoseController(@Qualifier("llmDiagnoseService") DiagnoseService diagnoseService) {
+        this.diagnoseService = diagnoseService;
+    }
 
     @PostMapping("/chat")
     @Operation(summary = "智能问诊(关键词匹配版)")

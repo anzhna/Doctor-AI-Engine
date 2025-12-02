@@ -83,6 +83,7 @@
             <artifactId>redisson-spring-boot-starter</artifactId>
             <version>3.24.1</version>
         </dependency>
+
     </dependencies>
 
     <repositories>

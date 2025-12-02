@@ -57,3 +57,16 @@ sa-token:
 #  level:
 #    root: error  # 全局只打印严重错误
 #    com.cloud.doctor: error # 你的业务代码也只打印报错，不打印 info
+
+
+# AI 模型配置 (DeepSeek)
+ai:
+  # API Key
+  api-key: sk-0d32af35f46d484b86717e411c1fee6f
+  # 模型接口地址
+  api-url: https://api.deepseek.com/chat/completions
+  # 模型名称
+  model-name: deepseek-chat
+  # 温度 (0-1)：越低回答越严谨
+  temperature: 0.3
+

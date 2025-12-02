@@ -258,6 +258,9 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         scheduleMapper.update(null,new LambdaUpdateWrapper<Schedule>()
                 .setSql("remaining_quota = remaining_quota+1")
                 .eq(Schedule::getId,appointment.getScheduleId()));
+        //redis也重新回滚
+        String stockKey = "schedule:stock:" + appointment.getScheduleId();
+        redisTemplate.opsForValue().increment(stockKey);
     }
 
 }
