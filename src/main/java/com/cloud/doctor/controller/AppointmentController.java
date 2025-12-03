@@ -27,7 +27,7 @@ public class AppointmentController {
 
         Long appId = appointmentService.submitOrder(req, userId);
         if (appId == -1L) {
-            return Result.error("抢完了"); // 返回 500，但不打印后台堆栈！
+            return Result.error("抢完了");
         }
         return Result.success(appId);
     }

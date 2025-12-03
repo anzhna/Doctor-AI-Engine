@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+
+import lombok.Builder;
 import lombok.Data;
 
 /**
@@ -15,6 +17,7 @@ import lombok.Data;
  */
 @TableName(value ="base_doctor")
 @Data
+@Builder
 public class Doctor implements Serializable {
     /**
      * 
