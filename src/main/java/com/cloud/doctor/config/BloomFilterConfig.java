@@ -44,7 +44,7 @@ public class BloomFilterConfig {
         return bloomFilter;
     }
 
-    // 3. 预热数据 (解决循环依赖的关键：不要调用上面的方法，直接用 redissonClient 操作)
+    // 3. 预热数据
     @PostConstruct
     public void init() {
         // --- 预热科室 ---

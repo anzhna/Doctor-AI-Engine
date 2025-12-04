@@ -31,7 +31,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Override
     public void register(UserRegisterReq req) {
-        // 1. 校验手机号是否已存在
+        // 校验手机号是否已存在
         User existUser = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getPhone, req.phone())); // record 的 get 方法不带 get 前缀，直接用 phone()
 
@@ -39,10 +39,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new RuntimeException("该手机号已注册");
         }
 
-        // 2. 密码加密 (BCrypt加密)
+        // 密码加密 (BCrypt加密)
         String encryptedPwd = BCrypt.hashpw(req.password());
 
-        // 3. 构建 User 对象并保存
+        // 构建 User 对象并保存
         User user = new User();
         user.setPhone(req.phone());
         user.setPassword(encryptedPwd);
@@ -89,7 +89,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 手机号脱敏处理 (Hutool工具)
         // DesensitizedUtil.mobilePhone(user.getPhone());
-        // 简单写法：
         if (user.getPhone() != null && user.getPhone().length() == 11) {
             vo.setPhone(user.getPhone().replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1****$2"));
         }
@@ -102,7 +101,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         User user = new User();
         user.setId(userId); // 指定主键，MP 会自动生成 UPDATE语句 WHERE id = ?
 
-        // 有什么更什么
         if (req.realName() != null) user.setRealName(req.realName());
         if (req.email() != null) user.setEmail(req.email());
         if (req.age() != null) user.setAge(req.age());

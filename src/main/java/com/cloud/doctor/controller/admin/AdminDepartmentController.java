@@ -9,14 +9,13 @@ import com.cloud.doctor.service.AdminDepartmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.apache.ibatis.annotations.Select;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/admin/dept")
-@Tag(name = "【管理端】科室管理")
+@Tag(name = "管理端 科室管理")
 @RequiredArgsConstructor
 public class AdminDepartmentController {
 

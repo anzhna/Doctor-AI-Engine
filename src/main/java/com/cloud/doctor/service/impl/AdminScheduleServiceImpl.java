@@ -28,9 +28,7 @@ public class AdminScheduleServiceImpl implements AdminScheduleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addSchedule(ScheduleFormReq req) {
-        // 1. 简单的业务校验 (比如检查该医生当天是否已经有排班了，这里省略)
-
-        // 2. 自动拆分班次(上午+下午)
+        // 自动拆分班次(上午+下午)
         int quotaPerShift = req.totalQuota() / 2;
 
         // 发布上午班
@@ -50,15 +48,15 @@ public class AdminScheduleServiceImpl implements AdminScheduleService {
         }).collect(Collectors.toList());
     }
 
-    /**
-     * 方法：创建单条排班并预热
-     */
+
+    // 创建单条排班并预热方法
+
     private void createAndWarmUp(Long doctorId, LocalDate date, Integer shiftType, Integer quota) {
         //组装实体对象
         Schedule schedule = new Schedule();
         schedule.setDoctorId(doctorId);
         schedule.setWorkDate(date);
-        schedule.setShiftType(shiftType); // 1-上午, 2-下午
+        schedule.setShiftType(shiftType); // 1上午, 2下午
         schedule.setTotalQuota(quota);
         schedule.setRemainingQuota(quota); // 初始剩余 = 总量
         schedule.setVersion(0); // 乐观锁初始版本

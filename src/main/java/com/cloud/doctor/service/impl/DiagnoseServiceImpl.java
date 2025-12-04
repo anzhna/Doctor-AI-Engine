@@ -31,8 +31,7 @@ public class DiagnoseServiceImpl implements DiagnoseService {
     public DiagnoseVO chat(DiagnoseReq req) {
         String text = req.symptom(); // 用户输入的描述
 
-        // 1. 【分词匹配】拿到数据库里所有的症状标签，看用户输入里包含了哪些
-        // (注：实际生产中会用 HanLP 分词，这里为了简单直接用 contains 字符串匹配)
+        // 分词匹配 拿到数据库里所有的症状标签，看用户输入里包含了哪些
         List<Symptom> allSymptoms = symptomMapper.selectList(null);
         List<Symptom> matchedSymptoms = allSymptoms.stream()
                 .filter(s -> text.contains(s.getName()))
@@ -46,8 +45,7 @@ public class DiagnoseServiceImpl implements DiagnoseService {
                     .build();
         }
 
-        // 2. 【核心算法】计算疾病得分
-        // Map<DiseaseId, Score>
+        // 计算疾病得分
         Map<Long, Integer> scoreMap = new HashMap<>();
 
         for (Symptom symptom : matchedSymptoms) {
@@ -63,7 +61,7 @@ public class DiagnoseServiceImpl implements DiagnoseService {
             }
         }
 
-        // 3. 【排序】取出得分最高的 Top 3 疾病
+        // 取出得分最高的 Top 3 疾病
         List<DiagnoseVO.DiseaseResult> results = scoreMap.entrySet().stream()
                 .sorted(Map.Entry.<Long, Integer>comparingByValue().reversed()) // 按分数倒序
                 .limit(3)
@@ -77,10 +75,10 @@ public class DiagnoseServiceImpl implements DiagnoseService {
                 })
                 .collect(Collectors.toList());
 
-        // 4. 【推荐科室】取得分最高的那个病的科室
+        // 取得分最高的那个病的科室
         String deptName = "未知科室";
         if (!results.isEmpty()) {
-            // 重新查一次最高分疾病的详情，为了拿 deptId (上面循环里其实可以优化，先这样写逻辑最清晰)
+            // 重新查一次最高分疾病的详情，为了拿 deptId
             Long topDiseaseId = scoreMap.entrySet().stream().max(Map.Entry.comparingByValue()).get().getKey();
             Disease topDisease = diseaseMapper.selectById(topDiseaseId);
             Department dept = departmentMapper.selectById(topDisease.getRecommendDeptId());

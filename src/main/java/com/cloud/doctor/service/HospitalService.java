@@ -13,5 +13,5 @@ public interface HospitalService {
     // 查某科室下的医生
     List<DoctorVO> listDoctors(Long deptId);
     //查询排班
-    public List<ScheduleVO> getScheduleList(Long doctorId);
+    List<ScheduleVO> getScheduleList(Long doctorId);
 }

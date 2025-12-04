@@ -16,11 +16,11 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                 }))
                 .addPathPatterns("/**")
                 .excludePathPatterns(
-                        "/user/login",      // 登录接口
-                        "/user/register",   // 注册接口
-                        "/doc.html",        // Swagger 文档页面
-                        "/webjars/**",      // Swagger 资源
-                        "/v3/api-docs/**"   // Swagger 资源
+                        "/user/login",      // 登录
+                        "/user/register",   // 注册
+                        "/doc.html",        // Swagger 文档
+                        "/webjars/**",      // Swagger
+                        "/v3/api-docs/**"   // Swagger
                 );
 
     }

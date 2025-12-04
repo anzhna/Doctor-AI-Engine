@@ -12,14 +12,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SnowflakeConfig {
 
-    // 机器ID (DataCenterId) 和 终端ID (WorkerId),暂时写死为 1, 1
-    // 在分布式系统中，这两个 ID 需要根据服务器 IP 自动生成。
+    // 机器ID和终端ID暂时写死为 1, 1
     private long workerId = 1;
     private long datacenterId = 1;
 
     @Bean
     public Snowflake snowflake() {
-        // 使用 Hutool 工具包构建雪花算法对象
+        // Hutool工具包构建雪花算法对象
         return IdUtil.getSnowflake(workerId, datacenterId);
     }
 }

@@ -1,59 +1,53 @@
 package com.cloud.doctor.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.lang.Snowflake;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.cloud.doctor.entity.*;
+import com.cloud.doctor.entity.Appointment;
+import com.cloud.doctor.entity.Department;
+import com.cloud.doctor.entity.Doctor;
+import com.cloud.doctor.entity.Schedule;
+import com.cloud.doctor.entity.User;
 import com.cloud.doctor.entity.dto.AppointSubmitReq;
 import com.cloud.doctor.entity.vo.AppointmentVO;
 import com.cloud.doctor.mapper.*;
 import com.cloud.doctor.service.AppointmentService;
-import com.cloud.doctor.service.ScheduleService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import cn.hutool.core.bean.BeanUtil; // 记得检查 import
 
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-/**
-* @author 10533
-* @description 针对表【bus_appointment(挂号预约订单表)】的数据库操作Service实现
-* @createDate 2025-11-20 22:59:11
-*/
 @Service
 @RequiredArgsConstructor
-public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appointment>
-    implements AppointmentService{
+public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appointment> implements AppointmentService {
 
     private final ScheduleMapper scheduleMapper;
-
     private final UserMapper userMapper;
-
     private final AppointmentMapper appointmentMapper;
-
     private final Snowflake snowflake;
-
     private final DoctorMapper doctorMapper;
-
     private final DepartmentMapper departmentMapper;
-
-    private final StringRedisTemplate redisTemplate; // 注入 Redis
-
-    private DefaultRedisScript<Long> deductStockScript; // 脚本对象
+    private final StringRedisTemplate redisTemplate;
     //编程式事务管理器
     private final TransactionTemplate transactionTemplate;
+    //Redisson 客户端 (用于加锁)
+    private final RedissonClient redissonClient;
 
-
+    private DefaultRedisScript<Long> deductStockScript;
     /*@Override
     @Transactional(rollbackFor = Exception.class)
     public Long submitOrder(AppointSubmitReq req, Long userId) {
@@ -108,33 +102,72 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
         deductStockScript.setLocation(new ClassPathResource("scripts/deduct_stock.lua"));
     }
     @Override
-    // ❌ 【重点】这里千万不要加 @Transactional 注解！否则 Redis 拦截层会失效，所有请求都会占用数据库连接。
+    // 这里不要加 @Transactional（Redis 拦截要在事务外）
     public Long submitOrder(AppointSubmitReq req, Long userId) {
         Long scheduleId = req.scheduleId();
         String stockKey = "schedule:stock:" + scheduleId;
 
-        // Redis (纯内存操作，极速，不占数据库连接)
+        // 1. 【Redis + Lua】第一次尝试扣减
         Long result = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
 
-        // 1. 库存不足 (Redis 拦截)
+        // 2. 库存不足
         if (result == 0) {
-            // 建议：压测时可以在 GlobalExceptionHandler 里针对这个异常不打印堆栈，防止控制台刷屏
-            //throw new RuntimeException("号源已抢光");
-            return -1L;
+            throw new RuntimeException("号源已抢光");
         }
 
-        // 2. 缓存未预热 (Redis 拦截)
+        // 3. 缓存未预热 (返回 -1) -> 触发懒加载 + 分布式锁
         if (result == -1) {
-            // 严禁在这里查库回填 Redis！必须由管理员提前预热！
-            //throw new RuntimeException("系统异常：排班未预热");
-            return -2L;
+            // 定义锁 Key
+            String lockKey = "lock:schedule:warmup:" + scheduleId;
+            RLock lock = redissonClient.getLock(lockKey);
+
+            try {
+                // 尝试加锁：最多等 3 秒，上锁后 10 秒自动释放
+                boolean isLocked = lock.tryLock(3, 10, TimeUnit.SECONDS);
+                if (isLocked) {
+                    try {
+                        // 进锁之后再试一次 Redis，可能已经缓存写入
+                        result = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
+
+                        if (result == 1) {
+                            // 已经把缓存写入，直接跳出if执行数据库逻辑
+                        } else if (result == 0) {
+                            throw new RuntimeException("号源已抢光");
+                        } else {
+                            // 还是 -1，说明我是第一个进来的 -> 查询数据库
+                            Schedule schedule = scheduleMapper.selectById(scheduleId);
+                            if (schedule == null || schedule.getRemainingQuota() <= 0) {
+                                throw new RuntimeException("号源已抢光或排班不存在");
+                            }
+
+                            // 写入redis缓存
+                            redisTemplate.opsForValue().set(stockKey, schedule.getRemainingQuota().toString());
+
+                            // 再次执行扣减redis逻辑
+                            result = redisTemplate.execute(deductStockScript, Collections.singletonList(stockKey));
+                            if (result != 1) {
+                                throw new RuntimeException("号源已抢光");
+                            }
+                        }
+                    } finally {
+                        // 释放锁
+                        if (lock.isHeldByCurrentThread()) {
+                            lock.unlock();
+                        }
+                    }
+                } else {
+                    // 加锁失败（人太多了）
+                    throw new RuntimeException("系统繁忙，请稍后重试");
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException("系统繁忙");
+            }
         }
 
-        // 数据库落地 (只有抢到号的 30 个人会走到这里)
+        // 数据库
         return transactionTemplate.execute(status -> {
             try {
-                // 1. MySQL 乐观锁扣减 (双重保障)
-                // SQL: UPDATE ... SET quota = quota - 1, version = version + 1 ...
+                // MySQL乐观锁扣减
                 int rows = scheduleMapper.update(null, new LambdaUpdateWrapper<Schedule>()
                         .setSql("remaining_quota = remaining_quota - 1")
                         .setSql("version = version + 1")
@@ -142,40 +175,32 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
                         .gt(Schedule::getRemainingQuota, 0));
 
                 if (rows == 0) {
-                    // 极低概率会走到这里 (Redis 放行了但 MySQL 没更新成功)
                     throw new RuntimeException("并发冲突，请重试");
                 }
 
-                // 2. 准备订单数据
-                // (为了数据完整性，虽然 Update 了，还是查一下获取 DoctorId 和 Fee)
+                // 2. 准备数据
                 Schedule schedule = scheduleMapper.selectById(scheduleId);
                 Doctor doctor = doctorMapper.selectById(schedule.getDoctorId());
                 User user = userMapper.selectById(userId);
 
                 // 3. 创建订单
                 Appointment order = new Appointment();
-                order.setOrderNo(snowflake.nextIdStr()); // 雪花算法
+                order.setOrderNo(snowflake.nextIdStr());
                 order.setUserId(userId);
                 order.setScheduleId(scheduleId);
                 order.setDoctorId(doctor.getId());
                 order.setPatientName(user.getRealName());
                 order.setFee(doctor.getConsultPrice());
-                order.setStatus(0); // 0-待支付
+                order.setStatus(0); // 待支付
                 order.setCreateTime(LocalDateTime.now());
 
                 appointmentMapper.insert(order);
                 return order.getId();
 
             } catch (Exception e) {
-                // 异常处理 (事务回滚 + Redis 补偿)
-
-                // 1. 标记数据库事务回滚
+                // 异常处理：回滚事务 + 回滚 Redis
                 status.setRollbackOnly();
-
-                // 2. 【关键】把 Redis 刚才扣掉的 1 个库存还回去！
                 redisTemplate.opsForValue().increment(stockKey);
-
-                // 3. 抛出异常给 Controller
                 throw new RuntimeException(e.getMessage());
             }
         });

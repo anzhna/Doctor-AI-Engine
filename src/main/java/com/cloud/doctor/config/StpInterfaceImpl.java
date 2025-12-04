@@ -15,7 +15,7 @@ import java.util.List;
 public class StpInterfaceImpl implements StpInterface {
 
     /**
-     * 返回一个账号所拥有的权限码集合 (目前我们只用角色，这个可以先不管，返回空)
+     * 返回一个账号所拥有的权限码集合 (目前只用角色，这个可以先不管，返回空)
      */
     @Override
     public List<String> getPermissionList(Object loginId, String loginType) {
@@ -31,9 +31,6 @@ public class StpInterfaceImpl implements StpInterface {
         long userId = Long.parseLong(loginId.toString());
 
         List<String> list = new ArrayList<>();
-
-        // --- 这里是核心逻辑 ---
-
         // 方案 A：去数据库查 Role (userMapper.selectById(userId).getRole())
 
         // 方案 B (偷懒版)：我们约定 ID=1 的超级账号是管理员

@@ -29,23 +29,22 @@ public class AdminDepartmentServiceImpl implements AdminDepartmentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addDepartment(DepartmentFormReq req) {
-        // 1. 转换 DTO -> PO
+        // 转换 DTO -> PO
         Department dept = new Department();
         BeanUtil.copyProperties(req, dept);
         if (dept.getParentId() == null) dept.setParentId(0L); // 默认顶级
 
-        // 2. 插入 MySQL
+        // 插入 MySQL
         departmentMapper.insert(dept);
 
-        // 3. 🔥【关键】同步更新布隆过滤器
-        // 如果不加这一步，新科室 ID 在 C 端会被当成“非法攻击”直接拦截！
+        // 同步更新布隆过滤器
         deptBloomFilter.add(dept.getId());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteDepartment(Long id) {
-        // 1. 校验：如果有子科室，不允许直接删除父级
+        // 如果有子科室不允许直接删除父级
         Long childrenCount = departmentMapper.selectCount(
                 new LambdaQueryWrapper<Department>().eq(Department::getParentId, id)
         );
@@ -53,7 +52,7 @@ public class AdminDepartmentServiceImpl implements AdminDepartmentService {
             throw new RuntimeException("该科室下包含子科室，无法删除");
         }
 
-        // 2. 逻辑删除 (MyBatis Plus 会自动处理 is_deleted=1)
+        // 逻辑删除 (MyBatis Plus 会自动处理 is_deleted=1)
         departmentMapper.deleteById(id);
 
     }

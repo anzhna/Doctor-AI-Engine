@@ -43,13 +43,11 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
 
     @Override
     public DiagnoseVO chat(DiagnoseReq req) {
-        // 1. 先查出所有科室名称 (比如：呼吸内科, 消化内科...)
-        // 实际项目中建议把这个 List 缓存到 Redis，别每次都查库
+        // 先查出所有科室名称
         List<String> deptNames = departmentMapper.selectList(null)
                 .stream().map(Department::getName).toList();
         String deptListStr = String.join(", ", deptNames);
 
-        // 2. 修改 Prompt
         String prompt = """
             你是一名专业的全科医生助手。用户描述症状如下：“%s”。
             
@@ -71,8 +69,7 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
             注：riskLevel范围1-3 (1轻微, 2一般, 3严重)，score范围0-100 (可能性)。
             """.formatted(req.symptom(),deptListStr);
 
-        // 2. 构造请求体 (符合 OpenAI 接口标准)
-        // 结构：{ "model": "...", "messages": [...], "temperature": ... }
+        // 结构：{ "model": "...", "messages": [...], "temperature": ... }(符合 OpenAI 接口标准)
         JSONObject userMessage = new JSONObject();
         userMessage.set("role", "user");
         userMessage.set("content", prompt);
@@ -81,24 +78,24 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
         requestBody.set("model", modelName);
         requestBody.set("messages", new JSONArray().put(userMessage));
         requestBody.set("temperature", temperature);
-        // 强制让 AI 返回 JSON 模式 (DeepSeek 支持这个参数，能极大提高 JSON 成功率)
+        // 强制让ai返回JSON模式
         requestBody.set("response_format", new JSONObject().set("type", "json_object"));
 
         try {
             log.info(">>> 正在呼叫 AI 医生，症状描述：{}", req.symptom());
 
-            // 3. 发送 HTTP POST 请求 (使用 Hutool 工具链)
+            // 发送 HTTP POST 请求 (Hutool工具链)
             String responseBody = HttpRequest.post(apiUrl)
                     .header("Authorization", "Bearer " + apiKey) // 身份认证
                     .header("Content-Type", "application/json")  // 告诉 AI 我发的是 JSON
-                    .body(requestBody.toString())                // 发送请求体
-                    .timeout(30000)                              // 设置超时 30秒 (AI 思考需要时间)
-                    .execute()                                   // 发射！
-                    .body();                                     // 获取响应内容
+                    .body(requestBody.toString())              // 发送请求体
+                    .timeout(30000)                 // 设置超时 30秒，给ai思考时间
+                    .execute()                                 // 发出
+                    .body();                                   // 获取响应内容
 
             log.info("<<< AI 响应原始数据: {}", responseBody);
 
-            // 4. 解析响应结果 (这一步最容易出错，要小心处理)
+            // 解析响应结果
             // 响应结构通常是：{ "choices": [ { "message": { "content": "你的JSON结果" } } ] }
             JSONObject jsonResp = JSONUtil.parseObj(responseBody);
 
@@ -113,7 +110,7 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
                     .getJSONObject("message")
                     .getStr("content");
 
-            // 5. 清洗数据 (防止 AI 不听话加了 ```json ... ```)
+            // 清洗数据 (防止 AI 加了 ```json ... ```)
             // 虽然我们在 prompt 里禁止了，但多做一步处理更保险
             content = content.replace("```json", "").replace("```", "").trim();
 
@@ -127,7 +124,7 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
             JSONArray diseasesArray = aiResult.getJSONArray("diseases");
             List<DiagnoseVO.DiseaseResult> diseaseList = JSONUtil.toList(diseasesArray, DiagnoseVO.DiseaseResult.class);
 
-            // 7. 组装最终结果并返回
+            // 返回
             return DiagnoseVO.builder()
                     .userSymptom(req.symptom())
                     .recommendDept(dept)
@@ -136,7 +133,7 @@ public class LlmDiagnoseServiceImpl implements DiagnoseService {
 
         } catch (Exception e) {
             log.error("AI 问诊失败", e);
-            // 8. 兜底策略 (降级)
+            // 兜底策略
             // 万一 AI 挂了、欠费了、超时了，不能让前端崩掉
             // 返回一个默认的提示
             return DiagnoseVO.builder()

@@ -15,11 +15,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/schedule")
-@Tag(name = "【管理端】排班管理")
+@Tag(name = "管理端 排班管理")
 @RequiredArgsConstructor
 public class AdminScheduleController {
 
-    // ✅ 注入专门的管理端 Service
     private final AdminScheduleService adminScheduleService;
 
     @PostMapping("/add")
@@ -29,7 +28,7 @@ public class AdminScheduleController {
 
         adminScheduleService.addSchedule(req);
 
-        return Result.success("排班发布成功，库存已同步");
+        return Result.success("排班发布成功");
     }
 
     @GetMapping("")
